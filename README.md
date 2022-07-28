@@ -1,5 +1,5 @@
 # BTCKeySearch
-A python tool that scans files in a given directory looking for Bitcoin private keys.
+A python tool that scans files in a given directory looking for Bitcoin private keys, BIP32 root keys (xpriv) and Monero private spend keys.
 
 This tool is part of the AnuBitux project. See more at https://anubitux.org
 
