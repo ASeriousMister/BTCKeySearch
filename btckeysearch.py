@@ -41,7 +41,7 @@ listOfFiles = getListOfFiles(directory)
 os.chdir(directory)
 
 n_files = len(listOfFiles)
-print(f'there are {n_files} to scan')
+print(f'there are {n_files} files to scan')
 i = 0
 # iterate through all the files
 while i < n_files:
