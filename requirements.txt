@@ -1,2 +1,4 @@
 argparse
-re
+regex
+pypdf2
+python-docx
