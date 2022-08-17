@@ -3,6 +3,8 @@
 import os
 import argparse
 import re
+import docx
+from PyPDF2 import PdfReader
 
 
 class color:
@@ -30,6 +32,10 @@ parser.add_argument('-d', metavar='directory', type=str, required=True, help='Di
 args = parser.parse_args()
 directory = args.d
 
+# Quits if directory does not exist
+if not os.path.exists(directory):
+    quit(color.RED + 'Directory does not exist!' + color.END)
+
 
 def getListOfFiles(dirName):
     # create a list of file and sub directories
@@ -47,12 +53,20 @@ def getListOfFiles(dirName):
     return allFiles
 
 
-# Get the list of all files in the fiven path
+def getText(filename):
+    # Get text from docx files
+    doc = docx.Document(filename)
+    fullText = []
+    for para in doc.paragraphs:
+        fullText.append(para.text)
+    return '\n'.join(fullText)
+
+
+# Get the list of all files in the given path
 listOfFiles = getListOfFiles(directory)
 
 # Changes working directory to avoid issues with file opening
-os.chdir(directory)
-
+# os.chdir(directory)
 n_files = len(listOfFiles)
 print(color.GREEN + f'There are {n_files} files to scan' + color.END)
 i = 0
@@ -60,8 +74,37 @@ matches = []    # bitcoin private keys
 matchexp = []   # xpriv keys
 matchex = []    # monero private spend key
 # iterate through all the files
+print(listOfFiles)
 while i < n_files:
-    f = open(listOfFiles[i], 'r')
+    # manage docx files
+    if '.docx' in listOfFiles[i]:
+        with open(directory + 'fgrtgdtegd', 'w') as f:  # random filename to avoid conflicts
+            f.write(getText(listOfFiles[i]))
+        f.close()
+        f = open(directory + 'fgrtgdtegd', 'r')
+        f.seek(0)
+    # manage pdf files
+    elif '.pdf' in listOfFiles[i]:
+        reader = PdfReader(listOfFiles[i])
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + "\n"
+        with open(directory + 'fgrtgdtegd', 'w') as f:
+            f.write(text)
+        f.close()
+        f = open(directory + 'fgrtgdtegd', 'r')
+        f.seek(0)
+    # managing other files like txt, csv, html, json, etc.
+    else:
+        # Try if file can't be handled
+        try:
+            with open(listOfFiles[i], 'r') as tc:
+                content = tc.read()
+        except UnicodeDecodeError:
+            print(color.YELLOW + '\nUnable to open ' + listOfFiles[i] + color.END)
+            i += 1
+            continue
+        f = open(listOfFiles[i], 'r')
     prog = 1
 # iterate through the lines in the current file
     while True:
@@ -118,5 +161,8 @@ while i < n_files:
                 print(f'{prog3}: {matchex[iw3]}')
             iw3 += 1
         matchex = []
-# go to next file
+    # go to next file
     i += 1
+# delete temporary file
+if os.path.isfile(directory + 'fgrtgdtegd'):
+    os.remove(directory + 'fgrtgdtegd')
