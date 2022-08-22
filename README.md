@@ -3,6 +3,9 @@ A python tool that scans files in a given directory looking for Bitcoin private 
 
 This tool is part of the AnuBitux project. See more at https://anubitux.org
 
+## Tutorial
+[Here](https://anubitux.org/how-to-find-lost-private-keys-with-anubitux/) you can see how the tool works.
+
 ## Installation
 To use btckeysearch simply download it:
 
