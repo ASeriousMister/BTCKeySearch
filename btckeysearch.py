@@ -3,11 +3,25 @@
 import os
 import argparse
 import re
-import docx
-from PyPDF2 import PdfReader
+import sys
+from pathlib import Path
 
+#pip install python-docx pypdf2
 
-class color:
+# Try importing third-party libraries safely
+try:
+    import docx
+    HAS_DOCX = True
+except ImportError:
+    HAS_DOCX = False
+
+try:
+    from PyPDF2 import PdfReader
+    HAS_PDF = True
+except ImportError:
+    HAS_PDF = False
+
+class Color:
     PURPLE = '\033[95m'
     CYAN = '\033[96m'
     DARKCYAN = '\033[36m'
@@ -19,150 +33,118 @@ class color:
     UNDERLINE = '\033[4m'
     END = '\033[0m'
 
+# Regex Patterns
+PATTERNS = {
+    'BTC Private Key (WIF)': re.compile(r'\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}\b'),
+    'BIP32 Root Key (xprv)': re.compile(r'\bxprv[a-km-zA-HJ-NP-Z1-9]{107,108}\b'),
+    #'Monero Spend Key': re.compile(r'\b[0-9a-fA-F]{62}[0][0-9a-fA-F]\b'),
+    # Added Ethereum Private Key (64 hex chars, strict check to avoid hash false positives)
+    #'ETH Private Key': re.compile(r'\b0x[a-fA-F0-9]{64}\b') 
+}
 
-# intro
-print(color.YELLOW + '\n*=*=*= BTC Key Search =*=*=*\n' + color.END)
-print('This tool scans through all the files in a given directory (including subdirectories)')
-print('searching for strings that could be private keys.')
-print('To run it use the -d option and provide the directory you want to scan.\n')
-print(color.RED + 'example:' + color.END + ' btckeysearch.py -d /home/user/dir\n')
+# Binary extensions to skip to save time
+IGNORE_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.zip', '.tar', '.gz', '.exe', '.dll', '.so', '.pyc'}
 
-parser = argparse.ArgumentParser(description='Cryptocurrency private key finder')
-parser.add_argument('-d', metavar='directory', type=str, required=True, help='Directory to scan')
-args = parser.parse_args()
-directory = args.d
+def get_docx_text(filepath):
+    """Extracts text from DOCX in memory."""
+    if not HAS_DOCX:
+        return ""
+    try:
+        doc = docx.Document(filepath)
+        return '\n'.join([para.text for para in doc.paragraphs])
+    except Exception:
+        return ""
 
-# Quits if directory does not exist
-if not os.path.exists(directory):
-    quit(color.RED + 'Directory does not exist!' + color.END)
-
-
-def getListOfFiles(dirName):
-    # create a list of file and sub directories
-    listOfFile = os.listdir(dirName)
-    allFiles = list()
-    # Iterate over all the entries
-    for entry in listOfFile:
-        # Create full path
-        fullPath = os.path.join(dirName, entry)
-        # If entry is a directory then get the list of files in this directory
-        if os.path.isdir(fullPath):
-            allFiles = allFiles + getListOfFiles(fullPath)
-        else:
-            allFiles.append(fullPath)
-    return allFiles
-
-
-def getText(filename):
-    # Get text from docx files
-    doc = docx.Document(filename)
-    fullText = []
-    for para in doc.paragraphs:
-        fullText.append(para.text)
-    return '\n'.join(fullText)
-
-
-# Get the list of all files in the given path
-listOfFiles = getListOfFiles(directory)
-
-# Changes working directory to avoid issues with file opening
-# os.chdir(directory)
-n_files = len(listOfFiles)
-print(color.GREEN + f'There are {n_files} files to scan' + color.END)
-i = 0
-matches = []    # bitcoin private keys
-matchexp = []   # xpriv keys
-matchex = []    # monero private spend key
-# iterate through all the files
-print(listOfFiles)
-while i < n_files:
-    # manage docx files
-    if '.docx' in listOfFiles[i]:
-        with open(directory + 'fgrtgdtegd', 'w') as f:  # random filename to avoid conflicts
-            f.write(getText(listOfFiles[i]))
-        f.close()
-        f = open(directory + 'fgrtgdtegd', 'r')
-        f.seek(0)
-    # manage pdf files
-    elif '.pdf' in listOfFiles[i]:
-        reader = PdfReader(listOfFiles[i])
-        text = ""
+def get_pdf_text(filepath):
+    """Extracts text from PDF in memory."""
+    if not HAS_PDF:
+        return ""
+    try:
+        reader = PdfReader(filepath)
+        text = []
         for page in reader.pages:
-            text += page.extract_text() + "\n"
-        with open(directory + 'fgrtgdtegd', 'w') as f:
-            f.write(text)
-        f.close()
-        f = open(directory + 'fgrtgdtegd', 'r')
-        f.seek(0)
-    # managing other files like txt, csv, html, json, etc.
-    else:
-        # Try if file can't be handled
-        try:
-            with open(listOfFiles[i], 'r') as tc:
-                content = tc.read()
-        except UnicodeDecodeError:
-            print(color.YELLOW + '\nUnable to open ' + listOfFiles[i] + color.END)
-            i += 1
-            continue
-        f = open(listOfFiles[i], 'r')
-    prog = 1
-# iterate through the lines in the current file
-    while True:
-        line = f.readline()
-        if not line:
-            break
-# regex for Bitcoin private keys
-        res = re.findall(r'[5KL][1-9A-HJ-NP-Za-km-z]{50,51}$', line)
-        if res:
-            matches.append(res)
-# regex for xpriv keys
-        res2 = re.findall(r'\bxprv[a-km-zA-HJ-NP-Z1-9]{107,108}\b', line)
-        if res2:
-            matchexp.append(res2)
-# regex for xmr private spend keys
-        res3 = re.findall(r'\b[0-9a-fA-F]{62}[0][0-9a-fA-F]\b', line)
-        if res3:
-            matchex.append(res3)
-    f.close()
-# print matches in the current file
-# bitcoin private keys
-    if len(matches) > 0:
-        prog = 0
-        print(color.DARKCYAN + f'\n======== Bitcoin private keys in {listOfFiles[i]} ========' + color.END)
-        nk = len(matches)
-        iw = 0
-        while iw < nk:
-            if matches[iw]:
-                prog += 1
-                print(f'{prog}: {matches[iw]}')
-            iw += 1
-        matches = []
-# xpriv keys
-    if len(matchexp) > 0:
-        prog2 = 0
-        print(color.DARKCYAN + f'\n======== BIP32 rootkeys in {listOfFiles[i]} ========' + color.END)
-        nk2 = len(matchexp)
-        iw2 = 0
-        while iw2 < nk2:
-            if matchexp[iw2]:
-                prog2 += 1
-                print(f'{prog2}: {matchexp[iw2]}')
-            iw2 += 1
-        matchexp = []
-# monero private spend key
-    if len(matchex) > 0:
-        print(color.DARKCYAN + f'\n======== Monero private spend keys in {listOfFiles[i]} ========' + color.END)
-        nk3 = len(matchex)
-        iw3 = 0
-        prog3 = 0
-        while iw3 < nk3:
-            if matchex[iw3]:
-                prog3 += 1
-                print(f'{prog3}: {matchex[iw3]}')
-            iw3 += 1
-        matchex = []
-    # go to next file
-    i += 1
-# delete temporary file
-if os.path.isfile(directory + 'fgrtgdtegd'):
-    os.remove(directory + 'fgrtgdtegd')
+            content = page.extract_text()
+            if content:
+                text.append(content)
+        return '\n'.join(text)
+    except Exception:
+        return ""
+
+def scan_content(content, filename, file_path):
+    """Scans a string of text for regex matches."""
+    found_any = False
+    
+    # Iterate over lines to give line numbers (simulated for PDFs/DOCs)
+    lines = content.splitlines()
+    
+    for line_idx, line in enumerate(lines, 1):
+        for label, pattern in PATTERNS.items():
+            matches = pattern.findall(line)
+            for match in matches:
+                if not found_any:
+                    print(f"{Color.DARKCYAN}\n======== Matches in {filename} ========{Color.END}")
+                    print(f"Path: {file_path}")
+                    found_any = True
+                
+                print(f"{Color.GREEN}[{label}]{Color.END} Line {line_idx}: {match}")
+
+def process_file(filepath):
+    """Determines how to read the file and triggers the scan."""
+    path_obj = Path(filepath)
+    
+    # Skip ignored extensions
+    if path_obj.suffix.lower() in IGNORE_EXTS:
+        return
+
+    content = ""
+
+    try:
+        # Handle specific formats
+        if path_obj.suffix.lower() == '.docx':
+            content = get_docx_text(filepath)
+        elif path_obj.suffix.lower() == '.pdf':
+            content = get_pdf_text(filepath)
+        else:
+            # Handle standard text files
+            # 'errors=replace' ensures binary junk doesn't crash the script
+            with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+
+        if content:
+            scan_content(content, path_obj.name, filepath)
+
+    except (PermissionError, OSError):
+        # Silently skip files we can't read (system files, etc)
+        pass
+    except Exception as e:
+        print(f"{Color.RED}Error reading {filepath}: {e}{Color.END}")
+
+def main():
+    print(Color.YELLOW + '\n*=*=*= Bitcoin Key Search =*=*=*\n' + Color.END)
+    
+    parser = argparse.ArgumentParser(description='Cryptocurrency private key finder')
+    parser.add_argument('-d', metavar='directory', type=str, required=True, help='Directory to scan')
+    args = parser.parse_args()
+    
+    target_dir = Path(args.d)
+
+    if not target_dir.exists():
+        sys.exit(f"{Color.RED}Directory does not exist!{Color.END}")
+
+    print(f"Scanning directory: {target_dir.resolve()}")
+    print("Press Ctrl+C to stop...\n")
+
+    try:
+        # os.walk is more efficient than manual recursion
+        for root, dirs, files in os.walk(target_dir):
+            for file in files:
+                filepath = os.path.join(root, file)
+                process_file(filepath)
+                
+    except KeyboardInterrupt:
+        print(f"\n{Color.RED}Scan interrupted by user.{Color.END}")
+
+    print(f"\n{Color.YELLOW}Scan complete.{Color.END}")
+
+if __name__ == "__main__":
+    main()
